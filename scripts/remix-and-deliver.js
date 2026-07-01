@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-'use strict';
-const { execFileSync } = require('node:child_process');
-const path = require('node:path');
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LANG = process.env.DIGEST_LANG || 'zh';
 function log(...a){ console.error('[digest]', ...a); }
 async function main(){
