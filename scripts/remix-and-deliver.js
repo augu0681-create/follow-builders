@@ -3,33 +3,29 @@
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const LANG = process.env.DIGEST_LANG || 'zh';
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 function log(...a){ console.error('[digest]', ...a); }
 async function main(){
   const raw = execFileSync('node', [path.join(__dirname,'prepare-digest.js')], { maxBuffer: 64*1024*1024 }).toString();
   const data = JSON.parse(raw);
   const stats = data.stats || {};
   log('stats', stats);
-  if ((stats.xBuilders||0)===0 && (stats.podcastEpisodes||0)===0){ await deliver('今天没有新的 builder 动态，明天见。'); return; }
+  if ((stats.xBuilders||0)===0 && (stats.podcastEpisodes||0)===0){ await deliver('【AI摘要】今天没有新的 builder 动态，明天见。'); return; }
   const prompts = data.prompts || {};
   const xBlocks = (data.x||[]).map(b=>{
     const tw=(b.tweets||[]).map(t=>`- ${(t.text||'').replace(/\s+/g,' ').trim()}\n  ${t.url}`).join('\n');
     return `### ${b.name}\nbio: ${b.bio||''}\n${tw}`;
   }).join('\n\n');
-  const sys=[prompts.digest_intro||'', '\n---\nTWEET SUMMARY RULES:\n', prompts.summarize_tweets||'',
-    LANG==='zh'?('\n---\n用中文输出整份摘要。翻译规则：\n'+(prompts.translate||'')):'',
-    '\n---\n硬规则：只用下面 JSON 里的内容，绝不联网、不编造；每条必须带原推 x.com 链接；跳过闲聊/活动帖。'].join('\n');
-  const user=`今天的 X 建造者原始推文如下，请重混成${LANG==='zh'?'中文':LANG==='bilingual'?'中英双语':'英文'}摘要（每人 1–2 句、保留链接）：\n\n${xBlocks}`;
-  const digest = await remix(sys, user);
-  await deliver(digest); log('delivered.');
+  const langWord = LANG==='zh'?'中文':LANG==='bilingual'?'中英双语':'英文';
+  const fullPrompt = [prompts.digest_intro||'', '\n--- 推文摘要规则 ---\n', prompts.summarize_tweets||'',
+    LANG==='zh'?('\n--- 翻译规则 ---\n用中文输出整份摘要。\n'+(prompts.translate||'')):'',
+    '\n--- 硬规则 ---','只用下面给的内容，绝不联网、不访问任何 URL、不编造；每条必须带原推 x.com 链接；跳过闲聊/活动/无实质帖。',
+    `请把下面的 X 建造者原始推文重混成${langWord}摘要（每人 1–2 句、保留链接）。直接输出成品，开头一行标题「📅 AI Builders 每日摘要」，不要任何前后缀、不要问我问题。`,
+    '\n=== 原始推文 ===\n', xBlocks].join('\n');
+  const digest = remixWithClaude(fullPrompt);
+  await deliver(digest || '【AI摘要】生成为空。'); log('delivered.');
 }
-async function remix(system,userText){
-  const key=process.env.ANTHROPIC_API_KEY; if(!key) throw new Error('缺 ANTHROPIC_API_KEY');
-  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
-    headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json'},
-    body:JSON.stringify({model:MODEL,max_tokens:4000,system,messages:[{role:'user',content:userText}]})});
-  if(!res.ok) throw new Error(`Anthropic API ${res.status}: ${await res.text()}`);
-  const j=await res.json(); return (j.content||[]).map(c=>c.text||'').join('').trim();
+function remixWithClaude(prompt){
+  return execFileSync('claude', ['-p','--output-format','text'], { input: prompt, maxBuffer: 64*1024*1024, env: process.env }).toString().trim();
 }
 async function deliver(text){
   const tgToken=process.env.TELEGRAM_BOT_TOKEN, tgChat=process.env.TELEGRAM_CHAT_ID;
