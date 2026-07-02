@@ -33,8 +33,24 @@ function remixWithClaude(prompt){
 async function deliver(text){
   const tgToken=process.env.TELEGRAM_BOT_TOKEN, tgChat=process.env.TELEGRAM_CHAT_ID;
   if(tgToken&&tgChat){ for(const c of splitText(text,4000)){ const r=await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:tgChat,text:c,disable_web_page_preview:true})}); if(!r.ok) throw new Error(`Telegram ${r.status}: ${await r.text()}`);} return; }
-  const hook=process.env.FEISHU_WEBHOOK; if(!hook) throw new Error('缺 FEISHU_WEBHOOK');
+  const appId=process.env.FEISHU_APP_ID, appSecret=process.env.FEISHU_APP_SECRET;
+  if(appId&&appSecret){ await deliverFeishuApp(text, appId, appSecret); return; }
+  const hook=process.env.FEISHU_WEBHOOK; if(!hook) throw new Error('缺投递配置：FEISHU_APP_ID/FEISHU_APP_SECRET 或 FEISHU_WEBHOOK');
   for(const c of splitText(text,9000)){ const r=await fetch(hook,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({msg_type:'text',content:{text:c}})}); const jt=await r.text(); if(!r.ok||/"code":[1-9]/.test(jt)) throw new Error(`Feishu webhook 失败: ${jt}`);}
+}
+async function deliverFeishuApp(text, appId, appSecret){
+  const base = process.env.FEISHU_DOMAIN || 'https://open.feishu.cn';
+  const tr = await fetch(`${base}/open-apis/auth/v3/tenant_access_token/internal`, { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({app_id:appId, app_secret:appSecret}) });
+  const tj = await tr.json();
+  if(tj.code!==0) throw new Error(`拿 tenant_access_token 失败: ${JSON.stringify(tj)}`);
+  const token = tj.tenant_access_token;
+  const idType = process.env.FEISHU_RECEIVE_ID_TYPE || 'chat_id';
+  const receiveId = process.env.FEISHU_RECEIVE_ID; if(!receiveId) throw new Error('缺 FEISHU_RECEIVE_ID');
+  for(const c of splitText(text,9000)){
+    const r = await fetch(`${base}/open-apis/im/v1/messages?receive_id_type=${idType}`, { method:'POST', headers:{'content-type':'application/json','authorization':`Bearer ${token}`}, body:JSON.stringify({receive_id:receiveId, msg_type:'text', content:JSON.stringify({text:c})}) });
+    const rj = await r.json();
+    if(rj.code!==0) throw new Error(`飞书发送失败: ${JSON.stringify(rj)}`);
+  }
 }
 function splitText(s,max){ const out=[]; let cur=''; for(const line of s.split('\n')){ if((cur+line+'\n').length>max){ if(cur) out.push(cur); cur='';} cur+=line+'\n';} if(cur.trim()) out.push(cur); return out.length?out:[s]; }
 main().catch(e=>{ console.error(e); process.exit(1); });
