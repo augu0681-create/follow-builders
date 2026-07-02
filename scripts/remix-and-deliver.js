@@ -22,7 +22,8 @@ async function main(){
     '\n--- 硬规则 ---','只用下面给的内容，绝不联网、不访问任何 URL、不编造；每条必须带原推 x.com 链接；跳过闲聊/活动/无实质帖。',
     `请把下面的 X 建造者原始推文重混成${langWord}摘要（每人 1–2 句、保留链接）。直接输出成品，开头一行标题「📅 AI Builders 每日摘要」，不要任何前后缀、不要问我问题。`,
     '\n=== 原始推文 ===\n', xBlocks].join('\n');
-  const digest = remixWithClaude(fullPrompt);
+  let digest = remixWithClaude(fullPrompt);
+  digest = digest.split('\n').filter(l => !/follow[- ]?builders|zarazhangrui|zara\s*zhang|Generated through|Follow Builders skill/i.test(l)).join('\n').replace(/\n{3,}/g,'\n\n').trim();
   await deliver(digest || '【AI摘要】生成为空。'); log('delivered.');
 }
 function remixWithClaude(prompt){
