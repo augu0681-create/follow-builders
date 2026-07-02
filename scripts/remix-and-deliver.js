@@ -26,7 +26,9 @@ async function main(){
   await deliver(digest || '【AI摘要】生成为空。'); log('delivered.');
 }
 function remixWithClaude(prompt){
-  return execFileSync('claude', ['-p','--output-format','text'], { input: prompt, maxBuffer: 64*1024*1024, env: process.env }).toString().trim();
+  const env = { ...process.env };
+  if (env.CLAUDE_CODE_OAUTH_TOKEN) env.CLAUDE_CODE_OAUTH_TOKEN = env.CLAUDE_CODE_OAUTH_TOKEN.replace(/\s/g,'');
+  return execFileSync('claude', ['-p','--output-format','text'], { input: prompt, maxBuffer: 64*1024*1024, env }).toString().trim();
 }
 async function deliver(text){
   const tgToken=process.env.TELEGRAM_BOT_TOKEN, tgChat=process.env.TELEGRAM_CHAT_ID;
