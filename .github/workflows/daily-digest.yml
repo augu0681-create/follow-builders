@@ -2,7 +2,7 @@ name: Daily AI Builders Digest
 
 on:
   schedule:
-    - cron: '2 2 * * *'
+    - cron: '20 1 * * *'
   workflow_dispatch: {}
 
 jobs:
